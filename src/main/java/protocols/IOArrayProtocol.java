@@ -11,9 +11,12 @@ public class IOArrayProtocol {
     public static int[] read(DataInputStream input) throws IOException {
         int size = input.readInt();
         byte[] bytes = new byte[size];
-        for (int i = 0; i < size; i++) {
-            bytes[i] = input.readByte();
+
+        int read = input.read(bytes);
+        if (read != size) {
+            throw new IOException("incorrect protocol message");
         }
+
         return toIntArray(bytes);
     }
 
