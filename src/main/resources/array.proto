@@ -1,0 +1,11 @@
+
+syntax = "proto2";
+
+package protocols;
+
+option java_package = "protocols";
+option java_outer_classname = "ArrayProtocol";
+
+message Array {
+    repeated int32 arr = 1;
+}
