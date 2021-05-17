@@ -27,8 +27,8 @@ public class Client implements Runnable {
     @Override
     public void run() {
         try (Socket socket = new Socket(host, port)) {
-            DataOutputStream output = new DataOutputStream(socket.getOutputStream());
-            DataInputStream input = new DataInputStream(socket.getInputStream());
+            OutputStream output = socket.getOutputStream();
+            InputStream input = socket.getInputStream();
             for (int i = 0; i < requestsNumber; i++) {
                 IOArrayProtocol.write(output, generateArray());
                 IOArrayProtocol.read(input);

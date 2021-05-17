@@ -1,18 +1,18 @@
 package protocols;
 
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
+import java.io.*;
 import java.util.List;
 
 
 public class IOArrayProtocol {
 
-    public static int[] read(DataInputStream input) throws IOException {
-        int size = input.readInt();
+    public static int[] read(InputStream input) throws IOException {
+        DataInputStream dataInputStream = new DataInputStream(input);
+
+        int size = dataInputStream.readInt();
         byte[] bytes = new byte[size];
 
-        int read = input.read(bytes);
+        int read = dataInputStream.read(bytes);
         if (read != size) {
             throw new IOException("incorrect protocol message");
         }
@@ -20,7 +20,7 @@ public class IOArrayProtocol {
         return toIntArray(bytes);
     }
 
-    public static void write(DataOutputStream output, int[] array) throws IOException {
+    public static void write(OutputStream output, int[] array) throws IOException {
         output.write(toByteArray(array));
         output.flush();
     }
