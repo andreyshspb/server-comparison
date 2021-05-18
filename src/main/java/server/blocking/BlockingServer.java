@@ -1,31 +1,65 @@
 package server.blocking;
 
-import java.io.IOException;
+import protocols.IOArrayProtocol;
+import server.SortService;
+
+import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 
-public class BlockingServer implements Runnable {
+import java.util.concurrent.ExecutorService;
 
-    private final static int DEFAULT_THREADS_NUMBER = 8;
+import static server.ServerConstants.*;
 
-    private final int port;
-    private final Executor threadPool = Executors.newFixedThreadPool(DEFAULT_THREADS_NUMBER);
 
-    public BlockingServer(int port) {
-        this.port = port;
+public class BlockingServer {
+    private final ExecutorService threadPool = Executors.newFixedThreadPool(DEFAULT_THREADS_NUMBER);
+
+    public void start() {
+        try (ServerSocket serverSocket = new ServerSocket(PORT)) {
+            while (true) {
+                Socket socket = serverSocket.accept();
+                new ClientHandler(socket).start();
+            }
+        } catch (IOException exception) {
+            System.err.println(exception.getMessage());
+        }
     }
 
-    @Override
-    public void run() {
-        try (ServerSocket server = new ServerSocket(port)) {
-            while (true) {
-                try (Socket client = server.accept()) {
-                    Thread thread = new Thread(new Reader(client, threadPool));
-                    thread.start();
-                }
-            }
-        } catch (IOException ignored) {}
+    private class ClientHandler {
+        private final ExecutorService requestReader = Executors.newSingleThreadExecutor();
+        private final ExecutorService responseWriter = Executors.newSingleThreadExecutor();
+
+        private final InputStream input;
+        private final OutputStream output;
+
+        private ClientHandler(Socket socket) throws IOException {
+            this.input = socket.getInputStream();
+            this.output = socket.getOutputStream();
+        }
+
+        public void start() {
+            requestReader.submit(() -> {
+                try {
+                    while (true) {
+                        int[] array = IOArrayProtocol.read(input);
+                        threadPool.submit(() -> {
+                            SortService.sort(array);
+                            sendResponse(array);
+                        });
+                    }
+                } catch (IOException ignored) {}
+            });
+        }
+
+        private void sendResponse(int[] data) {
+            responseWriter.submit(() -> {
+                try {
+                    IOArrayProtocol.write(output, data);
+                } catch (IOException ignored) {}
+            });
+        }
     }
 }
+
