@@ -1,6 +1,7 @@
 package client;
 
 import protocols.IOArrayProtocol;
+import server.ServerConstants;
 
 import java.io.*;
 import java.net.Socket;
@@ -8,6 +9,24 @@ import java.util.Random;
 
 
 public class Client implements Runnable {
+
+    public static void main(String[] args) {
+        try (Socket socket = new Socket("localhost", ServerConstants.PORT)) {
+            DataInputStream input = new DataInputStream(socket.getInputStream());
+            DataOutputStream output = new DataOutputStream(socket.getOutputStream());
+
+            int[] array = new int[4];
+            array[0] = 2; array[1] = 1;
+            array[2] = 4; array[3] = 3;
+
+            IOArrayProtocol.write(output, array);
+            int[] result = IOArrayProtocol.read(input);
+
+            for (int i = 0; i < 4; i++) {
+                System.out.println(result[i]);
+            }
+        } catch (IOException ignored) {}
+    }
 
     private final String host;
     private final int port;
@@ -27,8 +46,8 @@ public class Client implements Runnable {
     @Override
     public void run() {
         try (Socket socket = new Socket(host, port)) {
-            OutputStream output = socket.getOutputStream();
-            InputStream input = socket.getInputStream();
+            DataInputStream input = new DataInputStream(socket.getInputStream());
+            DataOutputStream output = new DataOutputStream(socket.getOutputStream());
             for (int i = 0; i < requestsNumber; i++) {
                 IOArrayProtocol.write(output, generateArray());
                 IOArrayProtocol.read(input);

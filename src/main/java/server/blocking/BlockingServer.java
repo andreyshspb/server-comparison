@@ -1,6 +1,7 @@
 package server.blocking;
 
 import protocols.IOArrayProtocol;
+import server.ServerConstants;
 import server.SortService;
 
 import java.io.*;
@@ -10,14 +11,12 @@ import java.util.concurrent.Executors;
 
 import java.util.concurrent.ExecutorService;
 
-import static server.ServerConstants.*;
-
 
 public class BlockingServer {
-    private final ExecutorService threadPool = Executors.newFixedThreadPool(DEFAULT_THREADS_NUMBER);
+    private final ExecutorService threadPool = Executors.newFixedThreadPool(ServerConstants.DEFAULT_THREADS_NUMBER);
 
     public void start() {
-        try (ServerSocket serverSocket = new ServerSocket(PORT)) {
+        try (ServerSocket serverSocket = new ServerSocket(ServerConstants.PORT)) {
             while (true) {
                 Socket socket = serverSocket.accept();
                 new ClientHandler(socket).start();
@@ -31,12 +30,12 @@ public class BlockingServer {
         private final ExecutorService requestReader = Executors.newSingleThreadExecutor();
         private final ExecutorService responseWriter = Executors.newSingleThreadExecutor();
 
-        private final InputStream input;
-        private final OutputStream output;
+        private final DataInputStream input;
+        private final DataOutputStream output;
 
         private ClientHandler(Socket socket) throws IOException {
-            this.input = socket.getInputStream();
-            this.output = socket.getOutputStream();
+            this.input = new DataInputStream(socket.getInputStream());
+            this.output = new DataOutputStream(socket.getOutputStream());
         }
 
         public void start() {

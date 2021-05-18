@@ -6,13 +6,11 @@ import java.util.List;
 
 public class IOArrayProtocol {
 
-    public static int[] read(InputStream input) throws IOException {
-        DataInputStream dataInputStream = new DataInputStream(input);
-
-        int size = dataInputStream.readInt();
+    public static int[] read(DataInputStream input) throws IOException {
+        int size = input.readInt();
         byte[] bytes = new byte[size];
 
-        int read = dataInputStream.read(bytes);
+        int read = input.read(bytes);
         if (read != size) {
             throw new IOException("incorrect protocol message");
         }
@@ -20,8 +18,10 @@ public class IOArrayProtocol {
         return toIntArray(bytes);
     }
 
-    public static void write(OutputStream output, int[] array) throws IOException {
-        output.write(toByteArray(array));
+    public static void write(DataOutputStream output, int[] array) throws IOException {
+        byte[] serialized = toByteArray(array);
+        output.writeInt(serialized.length);
+        output.write(serialized);
         output.flush();
     }
 
