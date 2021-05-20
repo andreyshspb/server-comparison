@@ -104,17 +104,20 @@ public class UnblockingServer {
         }
 
         private boolean check() {
-            if (readingMessage) {
-                return buffer.position() >= messageSize;
-            }
             if (buffer.position() >= ServerConstants.PROTOCOL_HEAD_SIZE) {
                 buffer.flip();
                 messageSize = buffer.getInt();
+                buffer.compact();
+                readingMessage = true;
+            }
+            if (readingMessage) {
+                return buffer.position() >= messageSize;
             }
             return false;
         }
 
         private byte[] takeMessage() {
+            buffer.flip();
             byte[] message = new byte[messageSize];
             for (int i = 0; i < messageSize; i++) {
                 message[i] = buffer.get();
