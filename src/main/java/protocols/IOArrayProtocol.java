@@ -25,12 +25,12 @@ public class IOArrayProtocol {
         output.flush();
     }
 
-    private static int[] toIntArray(byte[] data) throws IOException {
+    public static int[] toIntArray(byte[] data) throws IOException {
         ArrayProtocol.Array message = ArrayProtocol.Array.parseFrom(data);
         return toArray(message.getArrList());
     }
 
-    private static byte[] toByteArray(int[] array) {
+    public static byte[] toByteArray(int[] array) {
         ArrayProtocol.Array.Builder builder = ArrayProtocol.Array.newBuilder();
         for (int element : array) {
             builder.addArr(element);
