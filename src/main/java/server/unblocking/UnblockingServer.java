@@ -2,6 +2,7 @@ package server.unblocking;
 
 import protocols.IOArrayProtocol;
 import server.ServerConstants;
+import server.SortService;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -18,19 +19,23 @@ public class UnblockingServer {
 
     private final Reader reader;
     private final ExecutorService readerService = Executors.newSingleThreadExecutor();
+    private final Writer writer;
+    private final ExecutorService writerService = Executors.newSingleThreadExecutor();
 
     public UnblockingServer() throws IOException {
         this.reader = new Reader();
+        this.writer = new Writer();
     }
 
     public void start() {
         try (ServerSocketChannel serverSocketChannel = ServerSocketChannel.open()) {
             serverSocketChannel.socket().bind(new InetSocketAddress(ServerConstants.PORT));
             readerService.submit(reader);
+            writerService.submit(writer);
             while (true) {
                 SocketChannel socketChannel = serverSocketChannel.accept();
                 socketChannel.configureBlocking(false);
-                reader.register(new ClientHandler(socketChannel));
+                reader.register(new ClientReadHandler(socketChannel));
             }
         } catch (IOException exception) {
             System.err.println(exception.getMessage());
@@ -39,7 +44,7 @@ public class UnblockingServer {
 
     private class Reader implements Runnable {
         private final Selector selector;
-        private final Queue<ClientHandler> queue = new ConcurrentLinkedQueue<>();
+        private final Queue<ClientReadHandler> queue = new ConcurrentLinkedQueue<>();
 
         public Reader() throws IOException {
             this.selector = Selector.open();
@@ -57,8 +62,8 @@ public class UnblockingServer {
             } catch (IOException ignored) {}
         }
 
-        public void register(ClientHandler clientHandler) {
-            queue.add(clientHandler);
+        public void register(ClientReadHandler clientReadHandler) {
+            queue.add(clientReadHandler);
             selector.wakeup();
         }
 
@@ -66,40 +71,86 @@ public class UnblockingServer {
             Iterator<SelectionKey> keyIterator = selector.selectedKeys().iterator();
             while (keyIterator.hasNext()) {
                 SelectionKey key = keyIterator.next();
-                ClientHandler clientHandler = (ClientHandler) key.attachment();
-                clientHandler.process();
+                ClientReadHandler clientReadHandler = (ClientReadHandler) key.attachment();
+                clientReadHandler.process();
                 keyIterator.remove();
             }
         }
 
         private void registerClients() throws IOException {
             while (!queue.isEmpty()) {
-                ClientHandler clientHandler = queue.poll();
-                SocketChannel socketChannel = clientHandler.getChannel();
-                socketChannel.register(selector, SelectionKey.OP_READ, clientHandler);
+                ClientReadHandler clientReadHandler = queue.poll();
+                SocketChannel socketChannel = clientReadHandler.getChannel();
+                socketChannel.register(selector, SelectionKey.OP_READ, clientReadHandler);
             }
         }
     }
 
-    private class ClientHandler {
+    private class Writer implements Runnable {
+        private final Selector selector;
+        private final Queue<ClientWriteHandler> queue = new ConcurrentLinkedQueue<>();
+
+        public Writer() throws IOException {
+            this.selector = Selector.open();
+        }
+
+        @Override
+        public void run() {
+            try {
+                while (true) {
+                    if (selector.select() > 0) {
+                        handleClients();
+                    }
+                    registerClients();
+                }
+            } catch (IOException ignored) {}
+        }
+
+        public void register(ClientWriteHandler clientWriteHandler) {
+            queue.add(clientWriteHandler);
+            selector.wakeup();
+        }
+
+        private void handleClients() throws IOException {
+            Iterator<SelectionKey> keyIterator = selector.selectedKeys().iterator();
+            while (keyIterator.hasNext()) {
+                SelectionKey key = keyIterator.next();
+                ClientWriteHandler clientWriteHandler = (ClientWriteHandler) key.attachment();
+                clientWriteHandler.process();
+                keyIterator.remove();
+            }
+        }
+
+        private void registerClients() throws IOException {
+            while (!queue.isEmpty()) {
+                ClientWriteHandler clientWriteHandler = queue.poll();
+                SocketChannel socketChannel = clientWriteHandler.getChannel();
+                SelectionKey key = socketChannel.register(selector, SelectionKey.OP_WRITE, clientWriteHandler);
+                clientWriteHandler.setKey(key);
+            }
+        }
+    }
+
+    private class ClientReadHandler {
         private final SocketChannel channel;
         private final ByteBuffer buffer = ByteBuffer.allocate(ServerConstants.BUFFER_SIZE);
         private boolean readingMessage = false;
         private int messageSize;
 
-        public ClientHandler(SocketChannel channel) {
+        public ClientReadHandler(SocketChannel channel) {
             this.channel = channel;
         }
 
         public void process() throws IOException {
-            if (channel.read(buffer) > 0) {
-                if (check()) {
-                    byte[] message = takeMessage();
-                    int[] array = IOArrayProtocol.toIntArray(message);
-                    for (int element : array) {
-                        System.out.println(element);
-                    }
-                }
+            channel.read(buffer);
+            if (check()) {
+                byte[] message = takeMessage();
+                int[] array = IOArrayProtocol.toIntArray(message);
+                threadPool.submit(() -> {
+                    SortService.sort(array);
+                    byte[] data = IOArrayProtocol.toByteArray(array);
+                    writer.register(new ClientWriteHandler(channel, data));
+                });
             }
         }
 
@@ -123,11 +174,43 @@ public class UnblockingServer {
                 message[i] = buffer.get();
             }
             buffer.compact();
+            readingMessage = false;
             return message;
         }
 
         public SocketChannel getChannel() {
             return channel;
+        }
+    }
+
+    private class ClientWriteHandler {
+        private final SocketChannel channel;
+        private final ByteBuffer buffer;
+        private SelectionKey key;
+
+        public ClientWriteHandler(SocketChannel channel, byte[] data) {
+            this.channel = channel;
+            this.buffer = ByteBuffer.allocate(ServerConstants.PROTOCOL_HEAD_SIZE + data.length);
+            buffer.putInt(data.length);
+            buffer.put(data);
+            buffer.flip();
+        }
+
+        public void process() throws IOException {
+            System.out.println(buffer.position());
+            System.out.println(buffer.capacity());
+            channel.write(buffer);
+            if (buffer.position() == buffer.capacity()) {
+                key.cancel();
+            }
+        }
+
+        public SocketChannel getChannel() {
+            return channel;
+        }
+
+        public void setKey(SelectionKey key) {
+            this.key = key;
         }
     }
 
