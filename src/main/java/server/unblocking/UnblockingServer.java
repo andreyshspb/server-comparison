@@ -8,7 +8,9 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.*;
+import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
@@ -172,11 +174,17 @@ public class UnblockingServer {
         }
 
         private void registerClients() throws IOException {
+            List<ClientWriteHandler> wait = new ArrayList<>();
             while (!queue.isEmpty()) {
                 ClientWriteHandler clientWriteHandler = queue.poll();
                 SocketChannel socketChannel = clientWriteHandler.getChannel();
-                socketChannel.register(selector, SelectionKey.OP_WRITE, clientWriteHandler);
+                if (socketChannel.keyFor(selector) == null) {
+                    socketChannel.register(selector, SelectionKey.OP_WRITE, clientWriteHandler);
+                } else {
+                    wait.add(clientWriteHandler);
+                }
             }
+            queue.addAll(wait);
         }
 
         private class ClientWriteHandler {

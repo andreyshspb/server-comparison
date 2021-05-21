@@ -15,20 +15,33 @@ public class Client implements Runnable {
             DataInputStream input = new DataInputStream(socket.getInputStream());
             DataOutputStream output = new DataOutputStream(socket.getOutputStream());
 
-            for (int j = 0; j < 2; j++) {
-                int[] array = new int[4];
-                array[0] = 2;
-                array[1] = 5;
-                array[2] = 1;
-                array[3] = 3;
-                IOArrayProtocol.write(output, array);
-                int[] result = IOArrayProtocol.read(input);
 
-                for (int i = 0; i < 4; i++) {
-                    System.out.println(result[i]);
-                }
-                System.out.println("---");
+            int[] array = new int[4];
+            array[0] = 2;
+            array[1] = 5;
+            array[2] = 1;
+            array[3] = 3;
+            IOArrayProtocol.write(output, array);
+            IOArrayProtocol.write(output, array);
+            IOArrayProtocol.write(output, array);
+
+            int[] data = IOArrayProtocol.read(input);
+            for (int e : data) {
+                System.out.println(e);
             }
+            System.out.println("=====");
+
+            data = IOArrayProtocol.read(input);
+            for (int e : data) {
+                System.out.println(e);
+            }
+            System.out.println("=====");
+
+            data = IOArrayProtocol.read(input);
+            for (int e : data) {
+                System.out.println(e);
+            }
+            System.out.println("=====");
 
         } catch (IOException ignored) {}
     }
