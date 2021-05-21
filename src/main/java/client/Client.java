@@ -15,29 +15,29 @@ public class Client implements Runnable {
             DataInputStream input = new DataInputStream(socket.getInputStream());
             DataOutputStream output = new DataOutputStream(socket.getOutputStream());
 
-            int[] array = new int[4];
-            array[0] = 2; array[1] = 1;
-            array[2] = 4; array[3] = 3;
+            for (int j = 0; j < 2; j++) {
+                int[] array = new int[4];
+                array[0] = 2;
+                array[1] = 5;
+                array[2] = 1;
+                array[3] = 3;
+                IOArrayProtocol.write(output, array);
+                int[] result = IOArrayProtocol.read(input);
 
-            IOArrayProtocol.write(output, array);
-            int[] result = IOArrayProtocol.read(input);
-
-            for (int i = 0; i < 4; i++) {
-                System.out.println(result[i]);
+                for (int i = 0; i < 4; i++) {
+                    System.out.println(result[i]);
+                }
+                System.out.println("---");
             }
+
         } catch (IOException ignored) {}
     }
-
-    private final String host;
-    private final int port;
 
     private final int arraySize;
     private final int sendingDelta;
     private final int requestsNumber;
 
-    public Client(String host, int port, int arraySize, int sendingDelta, int requestsNumber) {
-        this.host = host;
-        this.port = port;
+    public Client(int arraySize, int sendingDelta, int requestsNumber) {
         this.arraySize = arraySize;
         this.sendingDelta = sendingDelta;
         this.requestsNumber = requestsNumber;
@@ -45,7 +45,7 @@ public class Client implements Runnable {
 
     @Override
     public void run() {
-        try (Socket socket = new Socket(host, port)) {
+        try (Socket socket = new Socket(ServerConstants.HOST, ServerConstants.PORT)) {
             DataInputStream input = new DataInputStream(socket.getInputStream());
             DataOutputStream output = new DataOutputStream(socket.getOutputStream());
             for (int i = 0; i < requestsNumber; i++) {

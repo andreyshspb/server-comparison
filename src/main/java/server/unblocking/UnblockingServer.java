@@ -35,7 +35,7 @@ public class UnblockingServer {
             while (true) {
                 SocketChannel socketChannel = serverSocketChannel.accept();
                 socketChannel.configureBlocking(false);
-                reader.register(new ClientReadHandler(socketChannel));
+                reader.register(socketChannel);
             }
         } catch (IOException exception) {
             System.err.println(exception.getMessage());
@@ -62,8 +62,8 @@ public class UnblockingServer {
             } catch (IOException ignored) {}
         }
 
-        public void register(ClientReadHandler clientReadHandler) {
-            queue.add(clientReadHandler);
+        public void register(SocketChannel channel) {
+            queue.add(new ClientReadHandler(channel));
             selector.wakeup();
         }
 
@@ -82,6 +82,56 @@ public class UnblockingServer {
                 ClientReadHandler clientReadHandler = queue.poll();
                 SocketChannel socketChannel = clientReadHandler.getChannel();
                 socketChannel.register(selector, SelectionKey.OP_READ, clientReadHandler);
+            }
+        }
+
+        private class ClientReadHandler {
+            private final SocketChannel channel;
+            private final ByteBuffer buffer = ByteBuffer.allocate(ServerConstants.BUFFER_SIZE);
+            private boolean readingMessage = false;
+            private int messageSize;
+
+            public ClientReadHandler(SocketChannel channel) {
+                this.channel = channel;
+            }
+
+            public void process() throws IOException {
+                channel.read(buffer);
+                if (check()) {
+                    byte[] message = takeMessage();
+                    int[] array = IOArrayProtocol.toIntArray(message);
+                    threadPool.submit(() -> {
+                        SortService.sort(array);
+                        byte[] data = IOArrayProtocol.toByteArray(array);
+                        writer.register(channel, data);
+                    });
+                }
+            }
+
+            private boolean check() {
+                if (buffer.position() >= ServerConstants.PROTOCOL_HEAD_SIZE) {
+                    buffer.flip();
+                    messageSize = buffer.getInt();
+                    buffer.compact();
+                    readingMessage = true;
+                }
+                if (readingMessage) {
+                    return buffer.position() >= messageSize;
+                }
+                return false;
+            }
+
+            private byte[] takeMessage() {
+                byte[] message = new byte[messageSize];
+                buffer.flip();
+                buffer.get(message);
+                buffer.compact();
+                readingMessage = false;
+                return message;
+            }
+
+            public SocketChannel getChannel() {
+                return channel;
             }
         }
     }
@@ -106,8 +156,8 @@ public class UnblockingServer {
             } catch (IOException ignored) {}
         }
 
-        public void register(ClientWriteHandler clientWriteHandler) {
-            queue.add(clientWriteHandler);
+        public void register(SocketChannel channel, byte[] data) {
+            queue.add(new ClientWriteHandler(channel, data));
             selector.wakeup();
         }
 
@@ -125,92 +175,32 @@ public class UnblockingServer {
             while (!queue.isEmpty()) {
                 ClientWriteHandler clientWriteHandler = queue.poll();
                 SocketChannel socketChannel = clientWriteHandler.getChannel();
-                SelectionKey key = socketChannel.register(selector, SelectionKey.OP_WRITE, clientWriteHandler);
-                clientWriteHandler.setKey(key);
-            }
-        }
-    }
-
-    private class ClientReadHandler {
-        private final SocketChannel channel;
-        private final ByteBuffer buffer = ByteBuffer.allocate(ServerConstants.BUFFER_SIZE);
-        private boolean readingMessage = false;
-        private int messageSize;
-
-        public ClientReadHandler(SocketChannel channel) {
-            this.channel = channel;
-        }
-
-        public void process() throws IOException {
-            channel.read(buffer);
-            if (check()) {
-                byte[] message = takeMessage();
-                int[] array = IOArrayProtocol.toIntArray(message);
-                threadPool.submit(() -> {
-                    SortService.sort(array);
-                    byte[] data = IOArrayProtocol.toByteArray(array);
-                    writer.register(new ClientWriteHandler(channel, data));
-                });
+                socketChannel.register(selector, SelectionKey.OP_WRITE, clientWriteHandler);
             }
         }
 
-        private boolean check() {
-            if (buffer.position() >= ServerConstants.PROTOCOL_HEAD_SIZE) {
+        private class ClientWriteHandler {
+            private final SocketChannel channel;
+            private final ByteBuffer buffer;
+
+            public ClientWriteHandler(SocketChannel channel, byte[] data) {
+                this.channel = channel;
+                this.buffer = ByteBuffer.allocate(ServerConstants.PROTOCOL_HEAD_SIZE + data.length);
+                buffer.putInt(data.length);
+                buffer.put(data);
                 buffer.flip();
-                messageSize = buffer.getInt();
-                buffer.compact();
-                readingMessage = true;
             }
-            if (readingMessage) {
-                return buffer.position() >= messageSize;
+
+            public void process() throws IOException {
+                channel.write(buffer);
+                if (buffer.position() == buffer.capacity()) {
+                    channel.keyFor(selector).cancel();
+                }
             }
-            return false;
-        }
 
-        private byte[] takeMessage() {
-            buffer.flip();
-            byte[] message = new byte[messageSize];
-            for (int i = 0; i < messageSize; i++) {
-                message[i] = buffer.get();
+            public SocketChannel getChannel() {
+                return channel;
             }
-            buffer.compact();
-            readingMessage = false;
-            return message;
-        }
-
-        public SocketChannel getChannel() {
-            return channel;
-        }
-    }
-
-    private class ClientWriteHandler {
-        private final SocketChannel channel;
-        private final ByteBuffer buffer;
-        private SelectionKey key;
-
-        public ClientWriteHandler(SocketChannel channel, byte[] data) {
-            this.channel = channel;
-            this.buffer = ByteBuffer.allocate(ServerConstants.PROTOCOL_HEAD_SIZE + data.length);
-            buffer.putInt(data.length);
-            buffer.put(data);
-            buffer.flip();
-        }
-
-        public void process() throws IOException {
-            System.out.println(buffer.position());
-            System.out.println(buffer.capacity());
-            channel.write(buffer);
-            if (buffer.position() == buffer.capacity()) {
-                key.cancel();
-            }
-        }
-
-        public SocketChannel getChannel() {
-            return channel;
-        }
-
-        public void setKey(SelectionKey key) {
-            this.key = key;
         }
     }
 
