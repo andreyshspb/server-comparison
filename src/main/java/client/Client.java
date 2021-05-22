@@ -16,11 +16,17 @@ public class Client implements Runnable {
             DataOutputStream output = new DataOutputStream(socket.getOutputStream());
 
 
-            int[] array = new int[4];
+            int[] array = new int[10];
             array[0] = 2;
             array[1] = 5;
             array[2] = 1;
-            array[3] = 3;
+            array[3] = 11;
+            array[4] = 23;
+            array[5] = 7;
+            array[6] = 9;
+            array[7] = 0;
+            array[8] = 1;
+            array[9] = 90;
             IOArrayProtocol.write(output, array);
             IOArrayProtocol.write(output, array);
             IOArrayProtocol.write(output, array);

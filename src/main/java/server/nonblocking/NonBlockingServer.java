@@ -151,11 +151,11 @@ public class NonBlockingServer {
             Iterator<SelectionKey> keyIterator = selector.selectedKeys().iterator();
             while (keyIterator.hasNext()) {
                 SelectionKey key = keyIterator.next();
-                ClientHandler ClientHandler = (ClientHandler) key.attachment();
+                ClientHandler handler = (ClientHandler) key.attachment();
                 if (mod == SelectionKey.OP_READ) {
-                    ClientHandler.read();
+                    handler.read();
                 } else if (mod == SelectionKey.OP_WRITE) {
-                    ClientHandler.write();
+                    handler.write();
                 }
                 keyIterator.remove();
             }
@@ -163,9 +163,9 @@ public class NonBlockingServer {
 
         private void registerClients() throws IOException {
             while (!queue.isEmpty()) {
-                ClientHandler ClientHandler = queue.poll();
-                SocketChannel socketChannel = ClientHandler.getChannel();
-                socketChannel.register(selector, mod, ClientHandler);
+                ClientHandler handler = queue.poll();
+                SocketChannel socketChannel = handler.getChannel();
+                socketChannel.register(selector, mod, handler);
             }
         }
     }
