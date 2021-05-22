@@ -79,6 +79,9 @@ public class NonBlockingServer {
                 writeBuffer.flip();
                 channel.write(writeBuffer);
                 writeBuffer.compact();
+                if (writeBuffer.position() == 0) {
+                    channel.keyFor(writeSelector).cancel();
+                }
             }
         }
 
