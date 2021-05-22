@@ -34,12 +34,12 @@ public class NonBlockingServer {
     }
 
     public void start() {
-        try (ServerSocketChannel serverSocketChannel = ServerSocketChannel.open()) {
-            serverSocketChannel.socket().bind(new InetSocketAddress(ServerConstants.PORT));
+        try (ServerSocketChannel server = ServerSocketChannel.open()) {
+            server.socket().bind(new InetSocketAddress(ServerConstants.PORT));
             readerService.submit(reader);
             writerService.submit(writer);
             while (true) {
-                SocketChannel socketChannel = serverSocketChannel.accept();
+                SocketChannel socketChannel = server.accept();
                 socketChannel.configureBlocking(false);
                 reader.register(new ClientHandler(socketChannel));
             }

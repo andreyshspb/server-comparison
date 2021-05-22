@@ -1,5 +1,6 @@
 package server;
 
+import server.asynchronous.AsynchronousServer;
 import server.nonblocking.NonBlockingServer;
 
 import java.io.IOException;
@@ -7,6 +8,6 @@ import java.io.IOException;
 
 public class StartServer {
     public static void main(String[] args) throws IOException {
-        new NonBlockingServer().start();
+        new AsynchronousServer().start();
     }
 }
