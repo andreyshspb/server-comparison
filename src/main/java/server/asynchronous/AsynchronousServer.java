@@ -12,6 +12,7 @@ import java.nio.channels.AsynchronousSocketChannel;
 import java.nio.channels.CompletionHandler;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Semaphore;
 
 
 public class AsynchronousServer {
@@ -61,6 +62,7 @@ public class AsynchronousServer {
 
     private class ClientHandler {
         private final AsynchronousSocketChannel channel;
+        private final Semaphore channelLock = new Semaphore(1);
 
         private final ByteBuffer readBuffer = ByteBuffer.allocate(ServerConstants.BUFFER_SIZE);
         private boolean readingMessage = false;
@@ -77,12 +79,21 @@ public class AsynchronousServer {
                 threadPool.submit(() -> {
                     SortService.sort(array);
                     ByteBuffer buffer = toBuffer(IOArrayProtocol.toByteArray(array));
+                    System.out.println("try lock");
+                    try {
+                        channelLock.acquire();
+                    } catch (InterruptedException ignored) {}
+                    System.out.println("locked");
                     channel.write(
                             buffer,
                             this,
                             new CompletionHandler<>() {
                                 @Override
                                 public void completed(Integer unused, ClientHandler handler) {
+                                    if (buffer.position() == buffer.limit()) {
+                                        channelLock.release();
+                                        return;
+                                    }
                                     channel.write(buffer, ClientHandler.this, this);
                                 }
 
