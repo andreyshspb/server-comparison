@@ -11,45 +11,7 @@ import java.util.Random;
 public class Client implements Runnable {
 
     public static void main(String[] args) {
-        try (Socket socket = new Socket("localhost", ServerConstants.PORT)) {
-            DataInputStream input = new DataInputStream(socket.getInputStream());
-            DataOutputStream output = new DataOutputStream(socket.getOutputStream());
-
-
-            int[] array = new int[10];
-            array[0] = 2;
-            array[1] = 5;
-            array[2] = 1;
-            array[3] = 11;
-            array[4] = 23;
-            array[5] = 7;
-            array[6] = 9;
-            array[7] = 0;
-            array[8] = 1;
-            array[9] = 90;
-            IOArrayProtocol.write(output, array);
-            IOArrayProtocol.write(output, array);
-            IOArrayProtocol.write(output, array);
-
-            int[] data = IOArrayProtocol.read(input);
-            for (int e : data) {
-                System.out.println(e);
-            }
-            System.out.println("=====");
-
-            data = IOArrayProtocol.read(input);
-            for (int e : data) {
-                System.out.println(e);
-            }
-            System.out.println("=====");
-
-            data = IOArrayProtocol.read(input);
-            for (int e : data) {
-                System.out.println(e);
-            }
-            System.out.println("=====");
-
-        } catch (IOException ignored) {}
+        new Client(100, 1000, 10).run();
     }
 
     private final int arraySize;
@@ -69,9 +31,14 @@ public class Client implements Runnable {
             DataOutputStream output = new DataOutputStream(socket.getOutputStream());
             for (int i = 0; i < requestsNumber; i++) {
                 IOArrayProtocol.write(output, generateArray());
-                IOArrayProtocol.read(input);
+                int[] response = IOArrayProtocol.read(input);
+                if (!isSorted(response)) {
+                    System.out.println("non sorted array");
+                    return;
+                }
                 sleep();
             }
+            System.out.println("Everything is OK");
         } catch (IOException ignored) {}
     }
 
@@ -88,5 +55,17 @@ public class Client implements Runnable {
         try {
             Thread.sleep(sendingDelta);
         } catch (InterruptedException ignored) {}
+    }
+
+    private boolean isSorted(int[] array) {
+        if (arraySize != array.length) {
+            return false;
+        }
+        for (int i = 0; i < array.length - 1; i++) {
+            if (array[i] > array[i + 1]) {
+                return false;
+            }
+        }
+        return true;
     }
 }

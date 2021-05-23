@@ -1,6 +1,7 @@
 package server.asynchronous;
 
 import protocols.IOArrayProtocol;
+import server.Server;
 import server.ServerConstants;
 import server.SortService;
 
@@ -15,9 +16,10 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
 
 
-public class AsynchronousServer {
+public class AsynchronousServer implements Server {
     private final ExecutorService threadPool = Executors.newFixedThreadPool(ServerConstants.DEFAULT_THREADS_NUMBER);
 
+    @Override
     public void start() {
         try (AsynchronousServerSocketChannel server = AsynchronousServerSocketChannel.open()) {
             server.bind(new InetSocketAddress(ServerConstants.PORT));
@@ -79,11 +81,9 @@ public class AsynchronousServer {
                 threadPool.submit(() -> {
                     SortService.sort(array);
                     ByteBuffer buffer = toBuffer(IOArrayProtocol.toByteArray(array));
-                    System.out.println("try lock");
                     try {
                         channelLock.acquire();
                     } catch (InterruptedException ignored) {}
-                    System.out.println("locked");
                     channel.write(
                             buffer,
                             this,

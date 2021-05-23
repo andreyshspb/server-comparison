@@ -1,6 +1,7 @@
 package server.nonblocking;
 
 import protocols.IOArrayProtocol;
+import server.Server;
 import server.ServerConstants;
 import server.SortService;
 
@@ -15,7 +16,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 
-public class NonBlockingServer {
+public class NonBlockingServer implements Server {
     private final ExecutorService threadPool = Executors.newFixedThreadPool(ServerConstants.DEFAULT_THREADS_NUMBER);
 
     private final Selector readSelector;
@@ -33,6 +34,7 @@ public class NonBlockingServer {
         this.writer = new IOService(writeSelector, SelectionKey.OP_WRITE);
     }
 
+    @Override
     public void start() {
         try (ServerSocketChannel server = ServerSocketChannel.open()) {
             server.socket().bind(new InetSocketAddress(ServerConstants.PORT));

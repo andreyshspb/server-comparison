@@ -1,6 +1,7 @@
 package server.blocking;
 
 import protocols.IOArrayProtocol;
+import server.Server;
 import server.ServerConstants;
 import server.SortService;
 
@@ -12,9 +13,10 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ExecutorService;
 
 
-public class BlockingServer {
+public class BlockingServer implements Server {
     private final ExecutorService threadPool = Executors.newFixedThreadPool(ServerConstants.DEFAULT_THREADS_NUMBER);
 
+    @Override
     public void start() {
         try (ServerSocket serverSocket = new ServerSocket(ServerConstants.PORT)) {
             while (true) {
