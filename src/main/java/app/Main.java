@@ -1,5 +1,6 @@
 package app;
 
+import client.Client;
 import server.Server;
 import server.asynchronous.AsynchronousServer;
 import server.blocking.BlockingServer;
@@ -152,5 +153,13 @@ public class Main {
             sendingDelta = lowerBound;
         }
 
+        new Thread(server::start).start();
+
+        StatisticService statisticService = new StatisticService();
+
+        Client client = new Client(1000, 100, 10, statisticService);
+        client.run();
+
+        System.out.println(statisticService.get());
     }
 }

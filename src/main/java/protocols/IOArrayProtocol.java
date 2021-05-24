@@ -10,9 +10,10 @@ public class IOArrayProtocol {
         int size = input.readInt();
         byte[] bytes = new byte[size];
 
-        int read = input.read(bytes);
-        if (read != size) {
-            throw new IOException("incorrect protocol message");
+        int offset = 0;
+        while (offset < size) {
+            int read = input.read(bytes, offset, input.available());
+            offset += read;
         }
 
         return toIntArray(bytes);

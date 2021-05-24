@@ -1,5 +1,6 @@
 package client;
 
+import app.StatisticService;
 import protocols.IOArrayProtocol;
 import server.ServerConstants;
 
@@ -9,19 +10,16 @@ import java.util.Random;
 
 
 public class Client implements Runnable {
-
-    public static void main(String[] args) {
-        new Client(100, 1000, 10).run();
-    }
-
     private final int arraySize;
     private final int sendingDelta;
     private final int requestsNumber;
+    private final StatisticService statisticService;
 
-    public Client(int arraySize, int sendingDelta, int requestsNumber) {
+    public Client(int arraySize, int sendingDelta, int requestsNumber, StatisticService statisticService) {
         this.arraySize = arraySize;
         this.sendingDelta = sendingDelta;
         this.requestsNumber = requestsNumber;
+        this.statisticService = statisticService;
     }
 
     @Override
@@ -30,16 +28,15 @@ public class Client implements Runnable {
             DataInputStream input = new DataInputStream(socket.getInputStream());
             DataOutputStream output = new DataOutputStream(socket.getOutputStream());
             for (int i = 0; i < requestsNumber; i++) {
+                long start = System.currentTimeMillis();
                 IOArrayProtocol.write(output, generateArray());
-                int[] response = IOArrayProtocol.read(input);
-                if (!isSorted(response)) {
-                    System.out.println("non sorted array");
-                    return;
-                }
+                IOArrayProtocol.read(input);
+                long finish = System.currentTimeMillis();
+                statisticService.add(finish - start);
                 sleep();
             }
-            System.out.println("Everything is OK");
         } catch (IOException ignored) {}
+        statisticService.stop();
     }
 
     private int[] generateArray() {
@@ -55,17 +52,5 @@ public class Client implements Runnable {
         try {
             Thread.sleep(sendingDelta);
         } catch (InterruptedException ignored) {}
-    }
-
-    private boolean isSorted(int[] array) {
-        if (arraySize != array.length) {
-            return false;
-        }
-        for (int i = 0; i < array.length - 1; i++) {
-            if (array[i] > array[i + 1]) {
-                return false;
-            }
-        }
-        return true;
     }
 }

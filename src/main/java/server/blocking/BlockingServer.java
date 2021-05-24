@@ -15,17 +15,23 @@ import java.util.concurrent.ExecutorService;
 
 public class BlockingServer implements Server {
     private final ExecutorService threadPool = Executors.newFixedThreadPool(ServerConstants.DEFAULT_THREADS_NUMBER);
+    private boolean running = false;
 
     @Override
     public void start() {
         try (ServerSocket serverSocket = new ServerSocket(ServerConstants.PORT)) {
-            while (true) {
+            while (running) {
                 Socket socket = serverSocket.accept();
                 new ClientHandler(socket).start();
             }
         } catch (IOException exception) {
             System.err.println(exception.getMessage());
         }
+    }
+
+    @Override
+    public void stop() {
+
     }
 
     private class ClientHandler {

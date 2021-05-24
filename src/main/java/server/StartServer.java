@@ -9,6 +9,6 @@ import java.io.IOException;
 
 public class StartServer {
     public static void main(String[] args) throws IOException {
-        new AsynchronousServer().start();
+        new BlockingServer().start();
     }
 }
