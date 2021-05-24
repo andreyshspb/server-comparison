@@ -46,6 +46,7 @@ public class BlockingServer implements Server {
     @Override
     public void stop() {
         try {
+            isWorking = false;
             serverSocket.close();
         } catch (IOException exception) {
             System.err.println("Some problem with closing a server socket with port " + ServerConstants.PORT);

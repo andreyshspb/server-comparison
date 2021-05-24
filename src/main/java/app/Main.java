@@ -2,6 +2,7 @@ package app;
 
 import client.Client;
 import server.Server;
+import server.ServerConstants;
 import server.asynchronous.AsynchronousServer;
 import server.blocking.BlockingServer;
 import server.nonblocking.NonBlockingServer;
@@ -17,6 +18,12 @@ public class Main {
         SENDING_DELTA
     }
 
+    enum ServerType {
+        BLOCKING,
+        NON_BLOCKING,
+        ASYNCHRONOUS
+    }
+
     public static void main(String[] args) throws IOException {
         Scanner in = new Scanner(System.in);
 
@@ -25,18 +32,18 @@ public class Main {
         System.out.println("1 -- Blocking architecture");
         System.out.println("2 -- Non-blocking architecture");
         System.out.println("3 -- Asynchronous architecture");
-        Server server;
+        ServerType serverType;
         while (true) {
             System.out.print(">> ");
-            int serverType = in.nextInt();
-            if (serverType == 1) {
-                server = new BlockingServer();
+            int type = in.nextInt();
+            if (type == 1) {
+                serverType = ServerType.BLOCKING;
                 break;
-            } else if (serverType == 2) {
-                server = new NonBlockingServer();
+            } else if (type == 2) {
+                serverType = ServerType.NON_BLOCKING;
                 break;
-            } else if (serverType == 3) {
-                server = new AsynchronousServer();
+            } else if (type == 3) {
+                serverType = ServerType.ASYNCHRONOUS;
                 break;
             }
             System.out.println("Incorrect value of parameter, try again");
@@ -153,13 +160,28 @@ public class Main {
             sendingDelta = lowerBound;
         }
 
-        new Thread(server::start).start();
+        Server server;
+        switch (serverType) {
+            case BLOCKING -> server = new BlockingServer();
+            case NON_BLOCKING -> server = new NonBlockingServer();
+            case ASYNCHRONOUS -> server = new AsynchronousServer();
+            default -> server = null;
+        }
+        Thread thread = new Thread(server::start);
+        thread.start();
 
-        StatisticService statisticService = new StatisticService();
+        for (int current = lowerBound; current <= upperBound; current += step) {
+            StatisticService statisticService = new StatisticService();
 
-        Client client = new Client(1000, 100, 10, statisticService);
-        client.run();
+            switch (testingType) {
+                case ARRAY_SIZE -> arraySize = current;
+                case CLIENTS_NUMBER -> clientsNumber = current;
+                case SENDING_DELTA -> sendingDelta = current;
+            }
 
-        System.out.println(statisticService.get());
+            new Client(arraySize, sendingDelta, requestNumber, statisticService).run();
+
+            System.out.println(current + " -- " + statisticService.get());
+        }
     }
 }
