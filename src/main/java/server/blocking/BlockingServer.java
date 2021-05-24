@@ -15,23 +15,41 @@ import java.util.concurrent.ExecutorService;
 
 public class BlockingServer implements Server {
     private final ExecutorService threadPool = Executors.newFixedThreadPool(ServerConstants.DEFAULT_THREADS_NUMBER);
-    private boolean running = false;
+    private boolean isWorking = false;
+    private ServerSocket serverSocket;
 
     @Override
     public void start() {
-        try (ServerSocket serverSocket = new ServerSocket(ServerConstants.PORT)) {
-            while (running) {
-                Socket socket = serverSocket.accept();
-                new ClientHandler(socket).start();
-            }
+        try {
+            serverSocket = new ServerSocket(ServerConstants.PORT);
         } catch (IOException exception) {
-            System.err.println(exception.getMessage());
+            System.err.println("Cannot run server with port " + ServerConstants.PORT);
+            return;
+        }
+
+        isWorking = true;
+
+        try {
+            while (isWorking) {
+                Socket socket = serverSocket.accept();
+                try {
+                    new ClientHandler(socket).start();
+                } catch (IOException exception) {
+                    System.err.println("Some problem with a client port " + socket.getPort());
+                }
+            }
+        } catch (IOException ignored) {
+            isWorking = false;
         }
     }
 
     @Override
     public void stop() {
-
+        try {
+            serverSocket.close();
+        } catch (IOException exception) {
+            System.err.println("Some problem with closing a server socket with port " + ServerConstants.PORT);
+        }
     }
 
     private class ClientHandler {
@@ -49,7 +67,7 @@ public class BlockingServer implements Server {
         public void start() {
             requestReader.submit(() -> {
                 try {
-                    while (true) {
+                    while (isWorking) {
                         int[] array = IOArrayProtocol.read(input);
                         threadPool.submit(() -> {
                             SortService.sort(array);
