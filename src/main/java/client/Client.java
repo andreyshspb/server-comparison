@@ -10,6 +10,31 @@ import java.util.Random;
 
 
 public class Client implements Runnable {
+
+    public static void main(String[] args) {
+        try (Socket socket = new Socket(ServerConstants.HOST, ServerConstants.PORT)) {
+            DataInputStream input = new DataInputStream(socket.getInputStream());
+            DataOutputStream output = new DataOutputStream(socket.getOutputStream());
+
+            int size = 100000;
+            int[] arr = new int[size];
+            for (int i = 0; i < size; i++) {
+                arr[i] = size - i;
+            }
+
+            IOArrayProtocol.write(output, arr);
+            int[] response = IOArrayProtocol.read(input);
+
+            System.out.println(response.length);
+            for (int element : response) {
+                System.out.println(element);
+            }
+
+        } catch (IOException exception) {
+            exception.printStackTrace();
+        }
+    }
+
     private final int arraySize;
     private final int sendingDelta;
     private final int requestsNumber;
@@ -35,7 +60,9 @@ public class Client implements Runnable {
                 statisticService.add(finish - start);
                 sleep();
             }
-        } catch (IOException ignored) {}
+        } catch (IOException exception) {
+            exception.printStackTrace();
+        }
         statisticService.stop();
     }
 
