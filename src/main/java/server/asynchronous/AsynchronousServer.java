@@ -48,7 +48,6 @@ public class AsynchronousServer implements Server {
         }
 
         public void process() throws IOException {
-            System.out.println("processed");
             while (check()) {
                 byte[] message = takeMessage();
                 int[] array = IOArrayProtocol.toIntArray(message);

@@ -167,8 +167,14 @@ public class Main {
             case ASYNCHRONOUS -> server = new AsynchronousServer();
             default -> server = null;
         }
-        Thread thread = new Thread(server::start);
-        thread.start();
+
+        new Thread(server::start).start();
+
+        try {
+            Thread.sleep(1000);
+        } catch (InterruptedException exception) {
+            exception.printStackTrace();
+        }
 
         for (int current = lowerBound; current <= upperBound; current += step) {
             StatisticService statisticService = new StatisticService();
@@ -179,7 +185,21 @@ public class Main {
                 case SENDING_DELTA -> sendingDelta = current;
             }
 
-            new Client(arraySize, sendingDelta, requestNumber, statisticService).run();
+            Thread[] threads = new Thread[clientsNumber];
+
+            for (int i = 0; i < clientsNumber; i++) {
+                Client client = new Client(arraySize, sendingDelta, requestNumber, statisticService);
+                threads[i] = new Thread(client);
+                threads[i].start();
+            }
+
+            for (Thread thread : threads) {
+                try {
+                    thread.join();
+                } catch (InterruptedException exception) {
+                    exception.printStackTrace();
+                }
+            }
 
             System.out.println(current + " -- " + statisticService.get());
         }
