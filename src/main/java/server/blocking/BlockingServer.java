@@ -15,22 +15,12 @@ import java.util.concurrent.ExecutorService;
 
 public class BlockingServer implements Server {
     private final ExecutorService threadPool = Executors.newFixedThreadPool(ServerConstants.DEFAULT_THREADS_NUMBER);
-    private boolean isWorking = false;
-    private ServerSocket serverSocket;
 
     @Override
     public void start() {
-        try {
-            serverSocket = new ServerSocket(ServerConstants.PORT);
-        } catch (IOException exception) {
-            System.err.println("Cannot run server with port " + ServerConstants.PORT);
-            return;
-        }
 
-        isWorking = true;
-
-        try {
-            while (isWorking) {
+        try (ServerSocket serverSocket = new ServerSocket(ServerConstants.PORT)) {
+            while (true) {
                 Socket socket = serverSocket.accept();
                 try {
                     new ClientHandler(socket).start();
@@ -38,18 +28,8 @@ public class BlockingServer implements Server {
                     System.err.println("Some problem with a client port " + socket.getPort());
                 }
             }
-        } catch (IOException ignored) {
-            isWorking = false;
-        }
-    }
-
-    @Override
-    public void stop() {
-        try {
-            isWorking = false;
-            serverSocket.close();
         } catch (IOException exception) {
-            System.err.println("Some problem with closing a server socket with port " + ServerConstants.PORT);
+            exception.printStackTrace();
         }
     }
 
@@ -68,7 +48,7 @@ public class BlockingServer implements Server {
         public void start() {
             requestReader.submit(() -> {
                 try {
-                    while (isWorking) {
+                    while (true) {
                         int[] array = IOArrayProtocol.read(input);
                         threadPool.submit(() -> {
                             SortService.sort(array);

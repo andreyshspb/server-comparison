@@ -50,9 +50,6 @@ public class NonBlockingServer implements Server {
         }
     }
 
-    @Override
-    public void stop() {}
-
     private class ClientHandler {
         private final SocketChannel channel;
 

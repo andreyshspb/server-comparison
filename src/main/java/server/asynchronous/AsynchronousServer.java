@@ -30,9 +30,6 @@ public class AsynchronousServer implements Server {
         }
     }
 
-    @Override
-    public void stop() {}
-
     private class ClientHandler {
         private final AsynchronousSocketChannel channel;
 

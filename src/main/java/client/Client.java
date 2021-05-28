@@ -2,7 +2,9 @@ package client;
 
 import app.StatisticService;
 import protocols.IOArrayProtocol;
+import server.Server;
 import server.ServerConstants;
+import server.blocking.BlockingServer;
 
 import java.io.*;
 import java.net.Socket;
@@ -12,20 +14,23 @@ import java.util.Random;
 public class Client implements Runnable {
 
     public static void main(String[] args) {
+
+        Server server = new BlockingServer();
+        new Thread(server::start).start();
+
         try (Socket socket = new Socket(ServerConstants.HOST, ServerConstants.PORT)) {
             DataInputStream input = new DataInputStream(socket.getInputStream());
             DataOutputStream output = new DataOutputStream(socket.getOutputStream());
 
-            int size = 100000;
-            int[] arr = new int[size];
-            for (int i = 0; i < size; i++) {
-                arr[i] = size - i;
-            }
+            int[] arr = new int[4];
+            arr[0] = 4;
+            arr[1] = 3;
+            arr[2] = 2;
+            arr[3] = 1;
 
             IOArrayProtocol.write(output, arr);
             int[] response = IOArrayProtocol.read(input);
 
-            System.out.println(response.length);
             for (int element : response) {
                 System.out.println(element);
             }

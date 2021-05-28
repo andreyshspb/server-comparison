@@ -2,12 +2,13 @@ package app;
 
 import client.Client;
 import server.Server;
-import server.ServerConstants;
 import server.asynchronous.AsynchronousServer;
 import server.blocking.BlockingServer;
 import server.nonblocking.NonBlockingServer;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Scanner;
 
 public class Main {
@@ -26,9 +27,24 @@ public class Main {
 
     public static void main(String[] args) throws IOException {
         Scanner in = new Scanner(System.in);
+        Path resultDir = Path.of("result");
+        StringBuilder message = new StringBuilder();
 
 
-        System.out.println("1. Please, choose server architecture for testing");
+        Path resultFile;
+        System.out.println("Please, give a name to this experiment");
+        while (true) {
+            System.out.print(">> ");
+            String name = in.next();
+            if (Files.notExists(resultDir.resolve(name))) {
+                resultFile = resultDir.resolve(name);
+                break;
+            }
+            System.out.println("The file with the specified name already exists, try again");
+        }
+
+
+        System.out.println("\n1. Please, choose server architecture for testing");
         System.out.println("1 -- Blocking architecture");
         System.out.println("2 -- Non-blocking architecture");
         System.out.println("3 -- Asynchronous architecture");
@@ -48,6 +64,8 @@ public class Main {
             }
             System.out.println("Incorrect value of parameter, try again");
         }
+        message.append(serverType).append("\n");
+
 
         System.out.println("\n2. Please, choose number of requests for one client");
         int requestNumber;
@@ -59,6 +77,7 @@ public class Main {
             }
             System.out.println("It is a negative number, try again");
         }
+        message.append(requestNumber).append("\n");
 
 
         System.out.println("\n3. Please, choose the parameter for server testing");
@@ -81,6 +100,7 @@ public class Main {
             }
             System.out.println("Incorrect value of parameter, try again");
         }
+        message.append(testingType).append("\n");
 
 
         System.out.println("\n4. Please, choose bounds and step");
@@ -114,6 +134,9 @@ public class Main {
             }
             System.out.println("It is not a positive number, try again");
         }
+        message.append(lowerBound).append("\n");
+        message.append(upperBound).append("\n");
+        message.append(step).append("\n");
 
 
         System.out.println("\n5. Please, choose the default value for other parameters");
@@ -159,13 +182,16 @@ public class Main {
         } else {
             sendingDelta = lowerBound;
         }
+        message.append(arraySize).append("\n");
+        message.append(clientsNumber).append("\n");
+        message.append(sendingDelta).append("\n");
 
-        Server server;
+
+        Server server = null;
         switch (serverType) {
             case BLOCKING -> server = new BlockingServer();
             case NON_BLOCKING -> server = new NonBlockingServer();
             case ASYNCHRONOUS -> server = new AsynchronousServer();
-            default -> server = null;
         }
 
         new Thread(server::start).start();
@@ -190,6 +216,9 @@ public class Main {
             for (int i = 0; i < clientsNumber; i++) {
                 Client client = new Client(arraySize, sendingDelta, requestNumber, statisticService);
                 threads[i] = new Thread(client);
+            }
+
+            for (int i = 0; i < clientsNumber; i++) {
                 threads[i].start();
             }
 
@@ -201,7 +230,12 @@ public class Main {
                 }
             }
 
-            System.out.println(current + " -- " + statisticService.get());
+            message.append(current).append("\n");
+            message.append(statisticService.get()).append("\n");
         }
+
+        Files.createFile(resultFile);
+        Files.writeString(resultFile, message.toString());
+        System.out.println("DONE");
     }
 }
