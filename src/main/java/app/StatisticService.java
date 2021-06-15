@@ -16,10 +16,17 @@ public class StatisticService {
         stopped = true;
     }
 
-    public long get() {
+    public synchronized long get() {
         if (count == 0) {
             return 0;
         }
         return sum / count;
     }
+
+    public synchronized void reset() {
+        sum = 0;
+        count = 0;
+        stopped = false;
+    }
+
 }

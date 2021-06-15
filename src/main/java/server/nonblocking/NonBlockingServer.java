@@ -1,5 +1,6 @@
 package server.nonblocking;
 
+import app.StatisticService;
 import protocols.IOArrayProtocol;
 import server.Server;
 import server.ServerConstants;
@@ -10,7 +11,9 @@ import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.*;
 import java.util.Iterator;
+import java.util.Map;
 import java.util.Queue;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -26,9 +29,12 @@ public class NonBlockingServer implements Server {
     private final IOService writer;
     private final ExecutorService writerService = Executors.newSingleThreadExecutor();
 
-    public NonBlockingServer() throws IOException {
+    private final StatisticService statistic;
+
+    public NonBlockingServer(StatisticService statistic) throws IOException {
         this.reader = new IOService(SelectionKey.OP_READ);
         this.writer = new IOService(SelectionKey.OP_WRITE);
+        this.statistic = statistic;
     }
 
     @Override
@@ -58,6 +64,9 @@ public class NonBlockingServer implements Server {
         private volatile ByteBuffer writeBuffer = null;
         private final AtomicInteger unsentMessageNumber = new AtomicInteger(0);
 
+        private final Queue<Long> startTimesQueue = new ConcurrentLinkedQueue<>();
+        private volatile Long startTime = null;
+
         public ClientHandler(SocketChannel channel) {
             this.channel = channel;
         }
@@ -72,9 +81,11 @@ public class NonBlockingServer implements Server {
                 if (readMessageBuffer.position() == readMessageBuffer.capacity()) {
                     readMessageBuffer.flip();
                     int[] array = IOArrayProtocol.toIntArray(readMessageBuffer);
+                    long start = System.currentTimeMillis();
                     workersThreadPool.submit(() -> {
                         SortService.sort(array);
                         writeBuffersQueue.add(IOArrayProtocol.toByteBuffer(array));
+                        startTimesQueue.add(start);
                         if (unsentMessageNumber.incrementAndGet() == 1) {
                             writer.register(this);
                         }
@@ -97,10 +108,14 @@ public class NonBlockingServer implements Server {
         public void write() throws IOException {
             if (writeBuffer == null) {
                 writeBuffer = writeBuffersQueue.poll();
+                startTime = startTimesQueue.poll();
             }
             channel.write(writeBuffer);
             if (writeBuffer.position() == writeBuffer.capacity()) {
+                long finish = System.currentTimeMillis();
+                statistic.add(finish - startTime);
                 writeBuffer = null;
+                startTime = null;
                 if (unsentMessageNumber.decrementAndGet() == 0) {
                     writer.unregister(this);
                 }

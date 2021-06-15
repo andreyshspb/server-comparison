@@ -1,5 +1,6 @@
 package server.blocking;
 
+import app.StatisticService;
 import protocols.IOArrayProtocol;
 import server.Server;
 import server.ServerConstants;
@@ -14,7 +15,14 @@ import java.util.concurrent.ExecutorService;
 
 
 public class BlockingServer implements Server {
+
     private final ExecutorService threadPool = Executors.newFixedThreadPool(ServerConstants.DEFAULT_THREADS_NUMBER);
+
+    private final StatisticService statisticService;
+
+    public BlockingServer(StatisticService statisticService) {
+        this.statisticService = statisticService;
+    }
 
     @Override
     public void start() {
@@ -50,9 +58,12 @@ public class BlockingServer implements Server {
                 try {
                     while (true) {
                         int[] array = IOArrayProtocol.read(input);
+                        long start = System.currentTimeMillis();
                         threadPool.submit(() -> {
                             SortService.sort(array);
                             sendResponse(array);
+                            long finish = System.currentTimeMillis();
+                            statisticService.add(finish - start);
                         });
                     }
                 } catch (IOException ignored) {}

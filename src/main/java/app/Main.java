@@ -187,23 +187,23 @@ public class Main {
         message.append(sendingDelta).append("\n");
 
 
+        StatisticService serverStatistic = new StatisticService();
+
         Server server = null;
         switch (serverType) {
-            case BLOCKING -> server = new BlockingServer();
-            case NON_BLOCKING -> server = new NonBlockingServer();
-            case ASYNCHRONOUS -> server = new AsynchronousServer();
+            case BLOCKING -> server = new BlockingServer(serverStatistic);
+            case NON_BLOCKING -> server = new NonBlockingServer(serverStatistic);
+            case ASYNCHRONOUS -> server = new AsynchronousServer(serverStatistic);
         }
 
         new Thread(server::start).start();
 
         try {
             Thread.sleep(1000);
-        } catch (InterruptedException exception) {
-            exception.printStackTrace();
-        }
+        } catch (InterruptedException ignored) {}
 
         for (int current = lowerBound; current <= upperBound; current += step) {
-            StatisticService statisticService = new StatisticService();
+            StatisticService clientStatistic = new StatisticService();
 
             switch (testingType) {
                 case ARRAY_SIZE -> arraySize = current;
@@ -214,7 +214,7 @@ public class Main {
             Thread[] threads = new Thread[clientsNumber];
 
             for (int i = 0; i < clientsNumber; i++) {
-                Client client = new Client(arraySize, sendingDelta, requestNumber, statisticService);
+                Client client = new Client(arraySize, sendingDelta, requestNumber, clientStatistic);
                 threads[i] = new Thread(client);
             }
 
@@ -231,7 +231,9 @@ public class Main {
             }
 
             message.append(current).append("\n");
-            message.append(statisticService.get()).append("\n");
+            // message.append(clientStatistic.get()).append("\n");
+            message.append(serverStatistic.get()).append("\n");
+            serverStatistic.reset();
         }
 
         Files.createFile(resultFile);

@@ -1,5 +1,6 @@
 package server.asynchronous;
 
+import app.StatisticService;
 import protocols.IOArrayProtocol;
 import server.Server;
 import server.ServerConstants;
@@ -18,12 +19,13 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public class AsynchronousServer implements Server {
 
-    public static void main(String[] args) {
-        Server server = new AsynchronousServer();
-        server.start();
-    }
-
     private final ExecutorService threadPool = Executors.newFixedThreadPool(ServerConstants.DEFAULT_THREADS_NUMBER);
+
+    private final StatisticService statistic;
+
+    public AsynchronousServer(StatisticService statistic) {
+        this.statistic = statistic;
+    }
 
     @Override
     public void start() {
@@ -47,6 +49,9 @@ public class AsynchronousServer implements Server {
         private final Queue<ByteBuffer> writeBuffersQueue = new ConcurrentLinkedQueue<>();
         private final AtomicInteger unsentMessagesNumber = new AtomicInteger(0);
 
+        private final Queue<Long> startTimesQueue = new ConcurrentLinkedQueue<>();
+        private volatile Long startTime = null;
+
         public ClientHandler(AsynchronousSocketChannel channel) {
             this.channel = channel;
         }
@@ -62,6 +67,7 @@ public class AsynchronousServer implements Server {
         public ByteBuffer getWriteBuffer() {
             if (writeBuffer == null) {
                 writeBuffer = writeBuffersQueue.poll();
+                startTime = startTimesQueue.poll();
             }
             return writeBuffer;
         }
@@ -70,17 +76,17 @@ public class AsynchronousServer implements Server {
             if (readingMessage) {
                 if (readMessageBuffer.position() == readMessageBuffer.capacity()) {
                     readMessageBuffer.flip();
-
                     int[] array = IOArrayProtocol.toIntArray(readMessageBuffer);
+                    long start = System.currentTimeMillis();
                     threadPool.submit(() -> {
                         SortService.sort(array);
                         ByteBuffer buffer = IOArrayProtocol.toByteBuffer(array);
                         writeBuffersQueue.add(buffer);
+                        startTimesQueue.add(start);
                         if (unsentMessagesNumber.incrementAndGet() == 1) {
                             channel.write(getWriteBuffer(), this, new WriteHandler());
                         }
                     });
-
                     readingMessage = false;
                     readMessageBuffer = null;
                 }
@@ -97,7 +103,12 @@ public class AsynchronousServer implements Server {
 
         public void write() throws IOException {
             if (writeBuffer.position() == writeBuffer.capacity()) {
+                long finish = System.currentTimeMillis();
+                if (startTime != null) {
+                    statistic.add(finish - startTime);
+                }
                 writeBuffer = null;
+                startTime = null;
                 unsentMessagesNumber.decrementAndGet();
             }
         }
