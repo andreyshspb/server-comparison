@@ -14,30 +14,27 @@ import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class NonBlockingServer implements Server {
-    private final ExecutorService threadPool = Executors.newFixedThreadPool(ServerConstants.DEFAULT_THREADS_NUMBER);
 
-    private final Selector readSelector;
-    private final Selector writeSelector;
+    private final ExecutorService workersThreadPool = Executors.newFixedThreadPool(ServerConstants.DEFAULT_THREADS_NUMBER);
 
     private final IOService reader;
     private final ExecutorService readerService = Executors.newSingleThreadExecutor();
+
     private final IOService writer;
     private final ExecutorService writerService = Executors.newSingleThreadExecutor();
 
     public NonBlockingServer() throws IOException {
-        this.readSelector = Selector.open();
-        this.writeSelector = Selector.open();
-        this.reader = new IOService(readSelector, SelectionKey.OP_READ);
-        this.writer = new IOService(writeSelector, SelectionKey.OP_WRITE);
+        this.reader = new IOService(SelectionKey.OP_READ);
+        this.writer = new IOService(SelectionKey.OP_WRITE);
     }
 
     @Override
     public void start() {
         try (ServerSocketChannel server = ServerSocketChannel.open()) {
-            server.socket().bind(new InetSocketAddress(ServerConstants.PORT));
+            server.bind(new InetSocketAddress(ServerConstants.PORT));
             readerService.submit(reader);
             writerService.submit(writer);
             while (true) {
@@ -46,107 +43,104 @@ public class NonBlockingServer implements Server {
                 reader.register(new ClientHandler(socketChannel));
             }
         } catch (IOException exception) {
-            System.err.println(exception.getMessage());
+            exception.printStackTrace();
         }
     }
 
     private class ClientHandler {
         private final SocketChannel channel;
 
-        private final ByteBuffer readBuffer = ByteBuffer.allocate(ServerConstants.BUFFER_SIZE);
+        private final ByteBuffer readSizeBuffer = ByteBuffer.allocate(Integer.BYTES);
+        private ByteBuffer readMessageBuffer = null;
         private boolean readingMessage = false;
-        private int messageSize = 0;
 
-        private final ByteBuffer writeBuffer = ByteBuffer.allocate(ServerConstants.BUFFER_SIZE);
+        private final Queue<ByteBuffer> writeBuffersQueue = new ConcurrentLinkedQueue<>();
+        private volatile ByteBuffer writeBuffer = null;
+        private final AtomicInteger unsentMessageNumber = new AtomicInteger(0);
 
         public ClientHandler(SocketChannel channel) {
             this.channel = channel;
-        }
-
-        public void read() throws IOException {
-            channel.read(readBuffer);
-            while (check()) {
-                byte[] message = takeMessage();
-                int[] array = IOArrayProtocol.toIntArray(message);
-                threadPool.submit(() -> {
-                    SortService.sort(array);
-                    putMessage(IOArrayProtocol.toByteArray(array));
-                    writer.register(this);
-                });
-            }
-        }
-
-        public void write() throws IOException{
-            synchronized (writeBuffer) {
-                writeBuffer.flip();
-                channel.write(writeBuffer);
-                writeBuffer.compact();
-                if (writeBuffer.position() == 0) {
-                    channel.keyFor(writeSelector).cancel();
-                }
-            }
         }
 
         public SocketChannel getChannel() {
             return channel;
         }
 
-        private boolean check() {
-            if (!readingMessage && readBuffer.position() >= ServerConstants.PROTOCOL_HEAD_SIZE) {
-                readBuffer.flip();
-                messageSize = readBuffer.getInt();
-                readBuffer.compact();
-                readingMessage = true;
-            }
+        public void read() throws IOException {
             if (readingMessage) {
-                return readBuffer.position() >= messageSize;
+                channel.read(readMessageBuffer);
+                if (readMessageBuffer.position() == readMessageBuffer.capacity()) {
+                    readMessageBuffer.flip();
+                    int[] array = IOArrayProtocol.toIntArray(readMessageBuffer);
+                    workersThreadPool.submit(() -> {
+                        SortService.sort(array);
+                        writeBuffersQueue.add(IOArrayProtocol.toByteBuffer(array));
+                        if (unsentMessageNumber.incrementAndGet() == 1) {
+                            writer.register(this);
+                        }
+                    });
+                    readingMessage = false;
+                    readMessageBuffer = null;
+                }
+            } else {
+                channel.read(readSizeBuffer);
+                if (readSizeBuffer.position() == readSizeBuffer.capacity()) {
+                    readSizeBuffer.flip();
+                    int size = readSizeBuffer.getInt();
+                    readingMessage = true;
+                    readSizeBuffer.clear();
+                    readMessageBuffer = ByteBuffer.allocate(size);
+                }
             }
-            return false;
         }
 
-        private byte[] takeMessage() {
-            byte[] message = new byte[messageSize];
-            readBuffer.flip();
-            readBuffer.get(message);
-            readBuffer.compact();
-            readingMessage = false;
-            messageSize = 0;
-            return message;
-        }
-
-        private void putMessage(byte[] data) {
-            synchronized (writeBuffer) {
-                writeBuffer.putInt(data.length);
-                writeBuffer.put(data);
+        public void write() throws IOException {
+            if (writeBuffer == null) {
+                writeBuffer = writeBuffersQueue.poll();
+            }
+            channel.write(writeBuffer);
+            if (writeBuffer.position() == writeBuffer.capacity()) {
+                writeBuffer = null;
+                if (unsentMessageNumber.decrementAndGet() == 0) {
+                    writer.unregister(this);
+                }
             }
         }
     }
 
     private class IOService implements Runnable {
-        private final Selector selector;
         private final int mod;
+        private final Selector selector;
         private final Queue<ClientHandler> queue = new ConcurrentLinkedQueue<>();
 
-        public IOService(Selector selector, int mod) {
-            this.selector = selector;
+        public IOService(int mod) throws IOException {
             this.mod = mod;
+            this.selector = Selector.open();
         }
 
         @Override
         public void run() {
             try {
                 while (true) {
-                    if (selector.select() > 0) {
+                    int n = selector.select();
+                    registerClients();
+                    if (n > 0) {
                         handleClients();
                     }
-                    registerClients();
                 }
-            } catch (IOException ignored) {}
+            } catch (IOException exception) {
+                exception.printStackTrace();
+            }
         }
 
         public void register(ClientHandler handler) {
             queue.add(handler);
             selector.wakeup();
+        }
+
+        public void unregister(ClientHandler handler) {
+            SocketChannel channel = handler.getChannel();
+            channel.keyFor(selector).cancel();
         }
 
         private void handleClients() throws IOException {

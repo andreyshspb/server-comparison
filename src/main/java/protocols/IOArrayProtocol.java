@@ -1,6 +1,7 @@
 package protocols;
 
 import java.io.*;
+import java.nio.ByteBuffer;
 import java.util.List;
 
 
@@ -8,14 +9,7 @@ public class IOArrayProtocol {
 
     public static int[] read(DataInputStream input) throws IOException {
         int size = input.readInt();
-        byte[] bytes = new byte[size];
-
-        int offset = 0;
-        while (offset < size) {
-            int read = input.read(bytes, offset, input.available());
-            offset += read;
-        }
-
+        byte[] bytes = input.readNBytes(size);
         return toIntArray(bytes);
     }
 
@@ -31,12 +25,26 @@ public class IOArrayProtocol {
         return toArray(message.getArrList());
     }
 
+    public static int[] toIntArray(ByteBuffer buffer) throws IOException {
+        ArrayProtocol.Array message = ArrayProtocol.Array.parseFrom(buffer);
+        return toArray(message.getArrList());
+    }
+
     public static byte[] toByteArray(int[] array) {
         ArrayProtocol.Array.Builder builder = ArrayProtocol.Array.newBuilder();
         for (int element : array) {
             builder.addArr(element);
         }
         return builder.build().toByteArray();
+    }
+
+    public static ByteBuffer toByteBuffer(int[] array) {
+        byte[] bytes = toByteArray(array);
+        ByteBuffer buffer = ByteBuffer.allocate(Integer.BYTES + bytes.length);
+        buffer.putInt(bytes.length);
+        buffer.put(bytes);
+        buffer.flip();
+        return buffer;
     }
 
     private static int[] toArray(List<Integer> list) {

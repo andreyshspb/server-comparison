@@ -2,48 +2,22 @@ package client;
 
 import app.StatisticService;
 import protocols.IOArrayProtocol;
-import server.Server;
 import server.ServerConstants;
-import server.blocking.BlockingServer;
 
 import java.io.*;
 import java.net.Socket;
+import java.util.Map;
 import java.util.Random;
+import java.util.concurrent.ConcurrentHashMap;
 
 
 public class Client implements Runnable {
-
-    public static void main(String[] args) {
-
-        Server server = new BlockingServer();
-        new Thread(server::start).start();
-
-        try (Socket socket = new Socket(ServerConstants.HOST, ServerConstants.PORT)) {
-            DataInputStream input = new DataInputStream(socket.getInputStream());
-            DataOutputStream output = new DataOutputStream(socket.getOutputStream());
-
-            int[] arr = new int[4];
-            arr[0] = 4;
-            arr[1] = 3;
-            arr[2] = 2;
-            arr[3] = 1;
-
-            IOArrayProtocol.write(output, arr);
-            int[] response = IOArrayProtocol.read(input);
-
-            for (int element : response) {
-                System.out.println(element);
-            }
-
-        } catch (IOException exception) {
-            exception.printStackTrace();
-        }
-    }
-
     private final int arraySize;
     private final int sendingDelta;
     private final int requestsNumber;
+
     private final StatisticService statisticService;
+    private final Map<Integer, Long> startTime = new ConcurrentHashMap<>();
 
     public Client(int arraySize, int sendingDelta, int requestsNumber, StatisticService statisticService) {
         this.arraySize = arraySize;
@@ -57,32 +31,42 @@ public class Client implements Runnable {
         try (Socket socket = new Socket(ServerConstants.HOST, ServerConstants.PORT)) {
             DataInputStream input = new DataInputStream(socket.getInputStream());
             DataOutputStream output = new DataOutputStream(socket.getOutputStream());
+
+            Thread requestsThread = new Thread(() -> {
+                try {
+                    for (int i = 0; i < requestsNumber; i++) {
+                        long start = System.currentTimeMillis();
+                        startTime.put(i, start);
+                        IOArrayProtocol.write(output, generateArray(i));
+                        long finish = System.currentTimeMillis();
+                        Thread.sleep(Math.max(0, sendingDelta - (finish - start)));
+                    }
+                } catch (Exception exception) {
+                    exception.printStackTrace();
+                }
+            });
+
+            requestsThread.start();
+
             for (int i = 0; i < requestsNumber; i++) {
-                long start = System.currentTimeMillis();
-                IOArrayProtocol.write(output, generateArray());
-                IOArrayProtocol.read(input);
+                int[] array = IOArrayProtocol.read(input);
                 long finish = System.currentTimeMillis();
-                statisticService.add(finish - start);
-                sleep();
+                statisticService.add(finish - startTime.get(array[0]));
             }
         } catch (IOException exception) {
             exception.printStackTrace();
         }
+
         statisticService.stop();
     }
 
-    private int[] generateArray() {
+    private int[] generateArray(int id) {
         int[] result = new int[arraySize];
         Random random = new Random();
-        for (int i = 0; i < arraySize; i++) {
-            result[i] = random.nextInt();
+        result[0] = id;
+        for (int i = 1; i < arraySize; i++) {
+            result[i] = id + random.nextInt(Integer.MAX_VALUE - id);
         }
         return result;
-    }
-
-    private void sleep() {
-        try {
-            Thread.sleep(sendingDelta);
-        } catch (InterruptedException ignored) {}
     }
 }
